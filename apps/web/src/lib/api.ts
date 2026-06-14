@@ -30,6 +30,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
     }
   }
 
+  if (response.status === 204) {
+    return undefined as unknown as T;
+  }
+
   return (await response.json()) as T;
 }
 
@@ -102,7 +106,7 @@ export async function registerMediaUpload(
 
 export async function updateMedia(
   id: string,
-  draft: Pick<UploadDraft, "title" | "description" | "manualTags">
+  draft: Pick<UploadDraft, "title" | "description" | "manualTags" | "folder">
 ): Promise<MediaRecord> {
   const payload = await handleResponse<{ item: MediaRecord }>(
     await fetch(`${API_BASE_URL}/api/media/${id}`, {
@@ -113,10 +117,39 @@ export async function updateMedia(
       body: JSON.stringify({
         title: draft.title,
         description: draft.description,
-        manualTags: draft.manualTags
+        manualTags: draft.manualTags,
+        folder: draft.folder
       })
     })
   );
 
   return payload.item;
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  await handleResponse<void>(
+    await fetch(`${API_BASE_URL}/api/media/${id}`, {
+      method: "DELETE"
+    })
+  );
+}
+
+export async function deleteFolder(folderName: string): Promise<void> {
+  await handleResponse<void>(
+    await fetch(`${API_BASE_URL}/api/media/folder/${encodeURIComponent(folderName)}`, {
+      method: "DELETE"
+    })
+  );
+}
+
+export async function renameFolderApi(oldName: string, newName: string): Promise<void> {
+  await handleResponse<{ message: string }>(
+    await fetch(`${API_BASE_URL}/api/media/folder/${encodeURIComponent(oldName)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ newName })
+    })
+  );
 }

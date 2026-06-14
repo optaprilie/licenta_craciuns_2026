@@ -8,6 +8,7 @@ import {
   buildSearchIndex,
   dedupeTags
 } from "./search-tokenizer.js";
+import { generateMediaMetadata } from "./ai-service.js";
 
 interface CloudinaryAssetResponse {
   public_id: string;
@@ -55,21 +56,42 @@ export async function indexUploadedMedia(
     media_metadata: true
   })) as CloudinaryAssetResponse;
 
+  let finalTitle = request.title.trim();
+  let finalDescription = request.description.trim();
+  let aiTags = dedupeTags(asset.tags ?? []);
+  let generatedFolder = "";
+
+  // Use Gemini to generate missing metadata if the user didn't provide a title or folder
+  if ((!finalTitle || !request.folder) && asset.secure_url) {
+    const generated = await generateMediaMetadata(asset.secure_url, `image/${asset.format || "jpeg"}`);
+    if (!finalTitle && generated.title) finalTitle = generated.title;
+    if (generated.description) finalDescription = generated.description;
+    if (generated.tags && generated.tags.length > 0) {
+      aiTags = dedupeTags([...aiTags, ...generated.tags]);
+    }
+    if (!request.folder && generated.folder) generatedFolder = generated.folder;
+  }
+
+  // Ensure title is not totally empty after AI attempt
+  if (!finalTitle) {
+    finalTitle = asset.original_filename || "Untitled Image";
+  }
+
   const manualTags = dedupeTags(request.manualTags);
-  const aiTags = dedupeTags(asset.tags ?? []);
   const searchIndex = buildSearchIndex({
-    title: request.title,
-    description: request.description,
+    title: finalTitle,
+    description: finalDescription,
     manualTags,
     aiTags,
     fileName: asset.original_filename ?? request.publicId
   });
   const indexedAt = new Date().toISOString();
+  const finalFolder = request.folder || generatedFolder || asset.folder || "Uncategorized";
 
   return {
-    id: encodeMediaId(asset.public_id),
-    title: request.title.trim(),
-    description: request.description.trim(),
+    id: "", // The database auto-generates the integer ID
+    title: finalTitle,
+    description: finalDescription,
     manualTags,
     aiTags,
     searchText: searchIndex.text,
@@ -83,7 +105,7 @@ export async function indexUploadedMedia(
     height: asset.height ?? null,
     duration: asset.duration ?? null,
     format: asset.format ?? null,
-    folder: asset.folder ?? null,
+    folder: finalFolder,
     originalFilename: asset.original_filename ?? null,
     createdAt: asset.created_at ?? indexedAt,
     indexedAt

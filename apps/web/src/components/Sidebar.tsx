@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   Home,
   FolderLock,
@@ -6,12 +6,32 @@ import {
   ScanFace,
   Settings,
   LogOut,
-  GalleryVerticalEnd
+  GalleryVerticalEnd,
+  Sun,
+  Moon
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate("/login");
+    } catch (error) {
+      console.error("Failed to sign out", error);
+    }
+  };
+
+  const accountName = user?.user_metadata?.full_name || user?.email || "Account";
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <GalleryVerticalEnd className="logo-icon" />
         <span className="logo-text">SmartGallery</span>
@@ -20,20 +40,23 @@ export function Sidebar() {
       <nav className="sidebar-nav">
         <NavLink
           to="/"
+          onClick={onClose}
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
         >
           <Home className="nav-icon" />
           Home
         </NavLink>
         <NavLink
-          to="/private-library"
+          to="/library"
+          onClick={onClose}
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
         >
           <FolderLock className="nav-icon" />
-          Private Library
+          Library
         </NavLink>
         <NavLink
           to="/shared-albums"
+          onClick={onClose}
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
         >
           <Users className="nav-icon" />
@@ -41,6 +64,7 @@ export function Sidebar() {
         </NavLink>
         <NavLink
           to="/recognized-persons"
+          onClick={onClose}
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
         >
           <ScanFace className="nav-icon" />
@@ -50,6 +74,7 @@ export function Sidebar() {
         <div className="nav-section-title">System</div>
         <NavLink
           to="/settings"
+          onClick={onClose}
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
         >
           <Settings className="nav-icon" />
@@ -58,7 +83,18 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <button className="sign-out-btn">
+        <div className="account-info">
+          <span className="account-name">{accountName}</span>
+        </div>
+        <button className="sign-out-btn" onClick={toggleTheme} style={{ marginBottom: '8px' }}>
+          {theme === "light" ? (
+            <Moon className="nav-icon" />
+          ) : (
+            <Sun className="nav-icon" />
+          )}
+          {theme === "light" ? "Dark Mode" : "Light Mode"}
+        </button>
+        <button className="sign-out-btn" onClick={handleSignOut}>
           <LogOut className="nav-icon" />
           Sign Out
         </button>

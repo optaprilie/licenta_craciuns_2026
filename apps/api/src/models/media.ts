@@ -6,12 +6,14 @@ export interface RegisterMediaRequest {
   manualTags: string[];
   publicId: string;
   resourceType: MediaResourceType;
+  folder?: string;
 }
 
 export interface UpdateMediaRequest {
   title?: string;
   description?: string;
   manualTags?: string[];
+  folder?: string;
 }
 
 export interface MediaDocument {

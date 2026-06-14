@@ -5,6 +5,8 @@ interface GalleryGridProps {
   items: MediaRecord[];
   isLoading: boolean;
   onUpdate?: (id: string, draft: UpdateMediaDraft) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+  availableFolders?: string[];
 }
 
 function formatDate(value: string): string {
@@ -30,18 +32,27 @@ function formatFileSize(bytes: number | null): string {
   return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+import { X } from "lucide-react";
+
 function MediaCard({
   item,
-  onUpdate
+  onUpdate,
+  onDelete,
+  availableFolders
 }: {
   item: MediaRecord;
   onUpdate?: (id: string, draft: UpdateMediaDraft) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+  availableFolders?: string[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [tags, setTags] = useState(item.manualTags.join(", "));
+  const [folder, setFolder] = useState(item.folder || "Uncategorized");
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   async function handleSave() {
     if (!onUpdate) return;
@@ -53,7 +64,8 @@ function MediaCard({
         manualTags: tags
           .split(",")
           .map((t) => t.trim())
-          .filter(Boolean)
+          .filter(Boolean),
+        folder: folder === "Uncategorized" ? "" : folder
       });
       setIsEditing(false);
     } catch (err) {
@@ -68,26 +80,55 @@ function MediaCard({
     setTitle(item.title);
     setDescription(item.description);
     setTags(item.manualTags.join(", "));
+    setFolder(item.folder || "Uncategorized");
     setIsEditing(false);
   }
 
+  async function handleDelete() {
+    if (!onDelete) return;
+    if (!confirm("Are you sure you want to permanently delete this media file?")) return;
+    
+    setIsSubmitting(true);
+    try {
+      await onDelete(item.id);
+    } catch (err) {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
-    <article className="media-card">
-      <div className="media-frame">
-        {item.resourceType === "video" ? (
-          <video
-            controls
-            preload="metadata"
-            poster={item.previewUrl}
-            src={item.mediaUrl}
-          />
-        ) : (
-          <img
-            src={item.mediaUrl}
-            alt={item.title}
-          />
-        )}
-      </div>
+    <>
+      {isFullscreen && (
+        <div className="modal-overlay" onClick={() => setIsFullscreen(false)} style={{ zIndex: 9999 }}>
+          <div className="fullscreen-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+            <button className="close-modal-btn" onClick={() => setIsFullscreen(false)} style={{ top: '-40px', right: '-40px', color: 'white', background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '50%' }}>
+              <X size={24} />
+            </button>
+            {item.resourceType === "video" ? (
+              <video controls autoPlay src={item.mediaUrl} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block' }} />
+            ) : (
+              <img src={item.mediaUrl} alt={item.title} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block', objectFit: 'contain' }} />
+            )}
+          </div>
+        </div>
+      )}
+      <article className="media-card">
+        <div className="media-frame" onClick={() => !isEditing && setIsFullscreen(true)} style={{ cursor: isEditing ? 'default' : 'zoom-in' }}>
+          {item.resourceType === "video" ? (
+            <video
+              controls={false}
+              preload="metadata"
+              poster={item.previewUrl}
+              src={item.mediaUrl}
+              style={{ pointerEvents: 'none' }}
+            />
+          ) : (
+            <img
+              src={item.mediaUrl}
+              alt={item.title}
+            />
+          )}
+        </div>
 
       <div className="media-content">
         <div className="media-meta-row">
@@ -118,6 +159,17 @@ function MediaCard({
               placeholder="Tags (comma separated)"
               className="edit-input"
             />
+            {availableFolders && availableFolders.length > 0 && (
+              <select
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
+                className="edit-input"
+              >
+                {availableFolders.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            )}
             <div className="edit-actions">
               <button onClick={handleSave} disabled={isSubmitting}>
                 {isSubmitting ? "Saving..." : "Save"}
@@ -130,7 +182,22 @@ function MediaCard({
         ) : (
           <>
             <h3>{item.title}</h3>
-            <p>{item.description || "No description"}</p>
+            {item.description ? (
+              <div className="description-container">
+                <p className={`media-description ${isDescExpanded ? 'expanded' : 'collapsed'}`}>
+                  {item.description}
+                </p>
+                <button 
+                  className="expand-btn" 
+                  onClick={() => setIsDescExpanded(!isDescExpanded)}
+                  aria-label={isDescExpanded ? "Compress description" : "Expand description"}
+                >
+                  {isDescExpanded ? "▲" : "▼"}
+                </button>
+              </div>
+            ) : (
+              <p className="media-description">No description</p>
+            )}
 
             <div className="tag-list">
               {item.manualTags.map((tag) => (
@@ -158,7 +225,12 @@ function MediaCard({
           <div className="media-actions">
             {!isEditing && onUpdate && (
               <button onClick={() => setIsEditing(true)} className="edit-btn">
-                Edit
+                Move / Edit
+              </button>
+            )}
+            {!isEditing && onDelete && (
+              <button onClick={handleDelete} className="edit-btn" style={{ color: "var(--danger)" }}>
+                Delete
               </button>
             )}
             <span>{item.format?.toUpperCase() ?? "Unknown format"}</span>
@@ -166,10 +238,11 @@ function MediaCard({
         </div>
       </div>
     </article>
+    </>
   );
 }
 
-export function GalleryGrid({ items, isLoading, onUpdate }: GalleryGridProps) {
+export function GalleryGrid({ items, isLoading, onUpdate, onDelete, availableFolders }: GalleryGridProps) {
   if (isLoading) {
     return (
       <section className="panel gallery-panel">
@@ -204,7 +277,13 @@ export function GalleryGrid({ items, isLoading, onUpdate }: GalleryGridProps) {
 
       <div className="gallery-grid">
         {items.map((item) => (
-          <MediaCard key={item.id} item={item} onUpdate={onUpdate} />
+          <MediaCard 
+            key={item.id} 
+            item={item} 
+            onUpdate={onUpdate} 
+            onDelete={onDelete} 
+            availableFolders={availableFolders} 
+          />
         ))}
       </div>
     </section>

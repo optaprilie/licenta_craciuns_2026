@@ -45,12 +45,9 @@ function readBooleanEnv(name: string, fallback: boolean): boolean {
 export const env = {
   port: readNumberEnv("PORT", 4000),
   clientOrigin: readOptionalEnv("CLIENT_ORIGIN", "http://localhost:5173"),
-  firestore: {
-    projectId: readRequiredEnv("FIREBASE_PROJECT_ID"),
-    clientEmail: readRequiredEnv("FIREBASE_CLIENT_EMAIL"),
-    privateKey: readRequiredEnv("FIREBASE_PRIVATE_KEY").replace(/\\n/g, "\n"),
-    collectionName: readOptionalEnv("FIRESTORE_MEDIA_COLLECTION", "media"),
-    databaseId: readOptionalEnv("FIRESTORE_DATABASE_ID", "(default)")
+  supabase: {
+    url: readRequiredEnv("SUPABASE_URL"),
+    serviceKey: readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY")
   },
   cloudinary: {
     cloudName: readRequiredEnv("CLOUDINARY_CLOUD_NAME"),

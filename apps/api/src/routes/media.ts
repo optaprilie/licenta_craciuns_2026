@@ -33,9 +33,8 @@ function parseRegisterBody(body: unknown): RegisterMediaRequest {
     ? candidate.manualTags.filter((tag): tag is string => typeof tag === "string")
     : [];
 
-  if (!title) {
-    throw new Error("A title is required.");
-  }
+  const folder =
+    typeof candidate.folder === "string" ? candidate.folder.trim() : "";
 
   if (!publicId) {
     throw new Error("A Cloudinary public ID is required.");
@@ -50,7 +49,8 @@ function parseRegisterBody(body: unknown): RegisterMediaRequest {
     description,
     manualTags,
     publicId,
-    resourceType: candidate.resourceType
+    resourceType: candidate.resourceType,
+    folder: folder || undefined
   };
 }
 
@@ -109,6 +109,7 @@ router.patch("/:id", async (request, response, next) => {
 
     if (typeof body.title === "string") updates.title = body.title.trim();
     if (typeof body.description === "string") updates.description = body.description.trim();
+    if (typeof body.folder === "string") updates.folder = body.folder.trim();
     if (Array.isArray(body.manualTags)) {
       updates.manualTags = body.manualTags.filter((t: unknown): t is string => typeof t === "string");
     }
@@ -123,6 +124,65 @@ router.patch("/:id", async (request, response, next) => {
       response.status(404).json({ message: error.message });
       return;
     }
+    next(error);
+  }
+});
+
+router.patch("/folder/:folder", async (request, response, next) => {
+  try {
+    const oldFolder = request.params.folder;
+    const body = request.body || {};
+    const newFolder = typeof body.newName === "string" ? body.newName.trim() : "";
+
+    if (!oldFolder) {
+      response.status(400).json({ message: "Old folder name is required." });
+      return;
+    }
+
+    if (!newFolder) {
+      response.status(400).json({ message: "New folder name is required." });
+      return;
+    }
+
+    const { renameFolder } = await import("../services/media-repository.js");
+    await renameFolder(oldFolder, newFolder);
+
+    response.json({ message: "Folder renamed successfully." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/folder/:folder", async (request, response, next) => {
+  try {
+    const folder = request.params.folder;
+    if (!folder) {
+      response.status(400).json({ message: "Folder name is required." });
+      return;
+    }
+
+    const { deleteFolderMedia } = await import("../services/media-repository.js");
+    await deleteFolderMedia(folder);
+
+    response.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/:id", async (request, response, next) => {
+  try {
+    const id = request.params.id;
+    if (!id) {
+      response.status(400).json({ message: "Media ID is required." });
+      return;
+    }
+
+    const { deleteMediaRecord } = await import("../services/media-repository.js");
+    await deleteMediaRecord(id);
+
+    response.status(204).send();
+  } catch (error) {
     next(error);
   }
 });

@@ -5,7 +5,7 @@ import type { UploadDraft } from "../types/media";
 
 interface UploadPanelProps {
   isSubmitting: boolean;
-  onSubmit: (draft: UploadDraft) => Promise<void>;
+  onSubmit: (drafts: UploadDraft[]) => Promise<void>;
 }
 
 function parseTags(value: string): string[] {
@@ -19,42 +19,42 @@ export function UploadPanel({ isSubmitting, onSubmit }: UploadPanelProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [folder, setFolder] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!file) {
-      setLocalError("Please choose an image or video before uploading");
-      return;
-    }
-
-    if (!title.trim()) {
-      setLocalError("Please add a title for the media item");
+    if (files.length === 0) {
+      setLocalError("Please choose at least one image or video before uploading");
       return;
     }
 
     setLocalError(null);
 
-    await onSubmit({
+    const drafts = files.map(file => ({
       title: title.trim(),
       description: description.trim(),
       manualTags: parseTags(tags),
+      folder: folder.trim(),
       file
-    });
+    }));
+
+    await onSubmit(drafts);
 
     setTitle("");
     setDescription("");
     setTags("");
-    setFile(null);
+    setFolder("");
+    setFiles([]);
   }
 
   return (
     <section className="panel upload-panel">
       <div className="section-heading">
         <p className="eyebrow">Upload</p>
-        <h2>Add a new file</h2>
+        <h2>Add new files</h2>
       </div>
 
       <form
@@ -62,27 +62,27 @@ export function UploadPanel({ isSubmitting, onSubmit }: UploadPanelProps) {
         onSubmit={handleSubmit}
       >
         <label className="field">
-          <span>Title</span>
+          <span>Title (Optional)</span>
           <input
             type="text"
             value={title}
-            placeholder="Your title here..."
+            placeholder="AI will generate this if left empty"
             onChange={(event) => setTitle(event.target.value)}
           />
         </label>
 
         <label className="field">
-          <span>Description</span>
+          <span>Description (Optional)</span>
           <textarea
             rows={4}
             value={description}
-            placeholder="Something about your media file..."
+            placeholder="AI will generate this if left empty"
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
 
         <label className="field">
-          <span>Manual tags</span>
+          <span>Manual tags (Optional)</span>
           <input
             type="text"
             value={tags}
@@ -92,15 +92,28 @@ export function UploadPanel({ isSubmitting, onSubmit }: UploadPanelProps) {
         </label>
 
         <label className="field">
-          <span>Media file</span>
+          <span>Folder (Optional)</span>
           <input
-            type="file"
-            accept="image/*,video/*"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            type="text"
+            value={folder}
+            placeholder="AI will categorize this if left empty"
+            onChange={(event) => setFolder(event.target.value)}
           />
         </label>
 
-        {file ? <p className="file-chip">Selected: {file.name}</p> : null}
+        <label className="field">
+          <span>Media files</span>
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            onChange={(event) => setFiles(Array.from(event.target.files || []))}
+          />
+        </label>
+
+        {files.length > 0 ? (
+          <p className="file-chip">Selected: {files.length} file(s)</p>
+        ) : null}
         {localError ? <p className="error-text">{localError}</p> : null}
 
         <button

@@ -24,9 +24,10 @@ export interface MediaRecord {
 }
 
 export interface UploadDraft {
-  title: string;
-  description: string;
-  manualTags: string[];
+  title?: string;
+  description?: string;
+  manualTags?: string[];
+  folder?: string;
   file: File;
 }
 
@@ -34,5 +35,6 @@ export interface UpdateMediaDraft {
   title: string;
   description: string;
   manualTags: string[];
+  folder?: string;
 }
 

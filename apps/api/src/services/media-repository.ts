@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { db } from "../lib/firebase.js";
+import { supabase } from "../lib/supabase.js";
 import type { MediaDocument, UpdateMediaRequest } from "../models/media.js";
 import {
   buildSearchIndex,
@@ -8,20 +8,75 @@ import {
   tokenizeText
 } from "./search-tokenizer.js";
 
-const mediaCollection = db.collection(env.firestore.collectionName);
+const tableName = "media";
+
+function toSnakeCase(media: MediaDocument): Record<string, any> {
+  const result: Record<string, any> = {
+    title: media.title,
+    description: media.description,
+    manual_tags: media.manualTags,
+    ai_tags: media.aiTags,
+    search_text: media.searchText,
+    search_tokens: media.searchTokens,
+    resource_type: media.resourceType,
+    public_id: media.publicId,
+    media_url: media.mediaUrl,
+    preview_url: media.previewUrl,
+    bytes: media.bytes,
+    width: media.width,
+    height: media.height,
+    duration: media.duration,
+    format: media.format,
+    folder: media.folder,
+    original_filename: media.originalFilename,
+    created_at: media.createdAt,
+    indexed_at: media.indexedAt,
+    storage_path: media.mediaUrl, // Satisfies not-null constraint for storage_path
+    upload_date: media.createdAt  // Satisfies not-null constraint for upload_date
+  };
+  // Explicitly do not include 'id' so the DB can auto-generate the integer.
+  return result;
+}
+
+function toCamelCase(row: Record<string, any>): MediaDocument {
+  return {
+    id: String(row.id),
+    title: row.title,
+    description: row.description,
+    manualTags: row.manual_tags ?? [],
+    aiTags: row.ai_tags ?? [],
+    searchText: row.search_text ?? "",
+    searchTokens: row.search_tokens ?? [],
+    resourceType: row.resource_type,
+    publicId: row.public_id,
+    mediaUrl: row.media_url,
+    previewUrl: row.preview_url,
+    bytes: row.bytes ?? null,
+    width: row.width ?? null,
+    height: row.height ?? null,
+    duration: row.duration ?? null,
+    format: row.format ?? null,
+    folder: row.folder ?? null,
+    originalFilename: row.original_filename ?? null,
+    createdAt: row.created_at,
+    indexedAt: row.indexed_at
+  };
+}
 
 function sortMediaRecords(a: MediaDocument, b: MediaDocument): number {
   return b.indexedAt.localeCompare(a.indexedAt);
 }
 
 export async function getMediaRecord(id: string): Promise<MediaDocument | null> {
-  const doc = await mediaCollection.doc(id).get();
-  return doc.exists ? (doc.data() as MediaDocument) : null;
+  const { data, error } = await supabase.from(tableName).select('*').eq('id', id).single();
+  if (error || !data) return null;
+  return toCamelCase(data);
 }
 
 export async function saveMediaRecord(media: MediaDocument): Promise<MediaDocument> {
-  await mediaCollection.doc(media.id).set(media);
-  return media;
+  const { data, error } = await supabase.from(tableName).insert([toSnakeCase(media)]).select().single();
+  if (error) throw new Error(error.message);
+  return toCamelCase(data);
 }
 
 export async function updateMediaRecord(
@@ -54,17 +109,20 @@ export async function updateMediaRecord(
   updated.searchText = searchIndex.text;
   updated.searchTokens = searchIndex.tokens;
 
-  await mediaCollection.doc(id).set(updated);
-  return updated;
+  const { data, error } = await supabase.from(tableName).update(toSnakeCase(updated)).eq('id', id).select().single();
+  if (error) throw new Error(error.message);
+  return toCamelCase(data);
 }
 
 export async function listRecentMedia(limit = 24): Promise<MediaDocument[]> {
-  const snapshot = await mediaCollection
-    .orderBy("indexedAt", "desc")
-    .limit(limit)
-    .get();
+  const { data, error } = await supabase
+    .from(tableName)
+    .select('*')
+    .order('indexed_at', { ascending: false })
+    .limit(limit);
 
-  return snapshot.docs.map((doc) => doc.data() as MediaDocument);
+  if (error) throw new Error(error.message);
+  return data.map(toCamelCase);
 }
 
 export async function searchMedia(
@@ -77,13 +135,17 @@ export async function searchMedia(
     return listRecentMedia(limit);
   }
 
-  const snapshot = await mediaCollection
-    .where("searchTokens", "array-contains-any", tokens)
-    .limit(Math.min(Math.max(limit * 3, 24), 100))
-    .get();
+  const { data, error } = await supabase
+    .from(tableName)
+    .select('*')
+    .overlaps('search_tokens', tokens)
+    .limit(Math.min(Math.max(limit * 3, 24), 100));
 
-  return snapshot.docs
-    .map((doc) => doc.data() as MediaDocument)
+  if (error) throw new Error(error.message);
+
+  const docs = data.map(toCamelCase);
+
+  return docs
     .map((item) => ({
       item,
       score: scoreMediaMatch(item, query)
@@ -98,4 +160,19 @@ export async function searchMedia(
     })
     .slice(0, limit)
     .map((candidate) => candidate.item);
+}
+
+export async function deleteMediaRecord(id: string): Promise<void> {
+  const { error } = await supabase.from(tableName).delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteFolderMedia(folderName: string): Promise<void> {
+  const { error } = await supabase.from(tableName).delete().eq('folder', folderName);
+  if (error) throw new Error(error.message);
+}
+
+export async function renameFolder(oldName: string, newName: string): Promise<void> {
+  const { error } = await supabase.from(tableName).update({ folder: newName }).eq('folder', oldName);
+  if (error) throw new Error(error.message);
 }

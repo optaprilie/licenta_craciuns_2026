@@ -66,17 +66,21 @@ export function Home() {
   const images = items.filter((item) => item.resourceType === "image").length;
   const videos = items.length - images;
 
-  async function handleUpload(draft: UploadDraft) {
+  async function handleUpload(drafts: UploadDraft[]) {
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
       const signature = await createUploadSignature();
-      const uploadedMedia = await uploadFileToCloudinary(draft.file, signature);
-      const savedMedia = await registerMediaUpload(draft, uploadedMedia);
+      let count = 0;
+      for (const draft of drafts) {
+        const uploadedMedia = await uploadFileToCloudinary(draft.file, signature);
+        await registerMediaUpload(draft, uploadedMedia);
+        count++;
+      }
 
-      setSuccessMessage(`"${savedMedia.title}" was uploaded and indexed successfully.`);
+      setSuccessMessage(`${count} file(s) uploaded and indexed successfully.`);
       setIsUploadModalOpen(false); // Close modal on success
       const refreshedItems = await fetchMedia("");
 
@@ -115,20 +119,19 @@ export function Home() {
 
   return (
     <div className="page-container">
-      <header className="page-header">
-        <div>
-          <h1>Gallery</h1>
-          <p className="subtitle">All Photos & Videos</p>
-        </div>
-        <div className="header-actions">
-          <SearchBar
-            query={query}
-            onQueryChange={setQuery}
-            isLoading={isLoading}
-          />
+      <header className="page-header" style={{ justifyContent: 'center', width: '100%' }}>
+        <div className="header-actions" style={{ width: '100%', maxWidth: '600px', display: 'flex', gap: '16px' }}>
+          <div style={{ flex: 1 }}>
+            <SearchBar
+              query={query}
+              onQueryChange={setQuery}
+              isLoading={isLoading}
+            />
+          </div>
           <button 
             className="primary-button icon-button"
             onClick={() => setIsUploadModalOpen(true)}
+            style={{ whiteSpace: 'nowrap' }}
           >
             <Plus size={20} />
             <span>Upload</span>
@@ -144,6 +147,25 @@ export function Home() {
           items={items}
           isLoading={isLoading}
           onUpdate={handleUpdate}
+          onDelete={async (id) => {
+            try {
+              const { deleteMedia } = await import("../lib/api");
+              await deleteMedia(id);
+              startTransition(() => {
+                setItems(prev => prev.filter(item => item.id !== id));
+              });
+            } catch (err) {
+              console.error(err);
+              alert("Failed to delete media.");
+            }
+          }}
+          availableFolders={Array.from(new Set([
+            ...items.map(i => i.folder || "Uncategorized"),
+            ...(() => {
+              try { return JSON.parse(localStorage.getItem("customFolders") || "[]"); }
+              catch { return []; }
+            })()
+          ])).sort()}
         />
       </div>
 
