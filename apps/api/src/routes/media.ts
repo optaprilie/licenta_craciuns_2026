@@ -50,7 +50,8 @@ function parseRegisterBody(body: unknown): RegisterMediaRequest {
     manualTags,
     publicId,
     resourceType: candidate.resourceType,
-    folder: folder || undefined
+    folder: folder || undefined,
+    skipAI: candidate.skipAI === true
   };
 }
 

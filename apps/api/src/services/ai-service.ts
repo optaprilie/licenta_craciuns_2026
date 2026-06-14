@@ -38,57 +38,60 @@ export async function generateMediaMetadata(
     const base64Data = buffer.toString("base64");
 
     // 2. Prepare the prompt and schema
-    const prompt = "Analyze this image and generate a concise title, a description (if the image contains any text, please transcribe it completely and include it at the end of the description), a list of relevant tags, and a generic folder name for categorizing it (example: 'Nature', 'Pets', 'Documents', 'Vacation', 'Portraits'). The folder name should be a maximum of 2 words.";
+    const prompt = "Analyze this image and generate a concise title, a detailed description (if the image contains any text, please transcribe it completely and include it at the end of the description), a list of relevant tags, and a generic folder name for categorizing it (e.g. 'Nature', 'Pets', 'Documents', 'Vacation', 'Portraits'). The folder name should be a maximum of 2 words.";
 
-    // 3. Call Gemini
-    const result = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
+    // 3. Call Gemini with retry logic for 429/503 errors
+    let result;
+    let retries = 3;
+    let delay = 2000; // Start with 2 second delay
+
+    while (retries > 0) {
+      try {
+        result = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [
             {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType
-              }
+              role: "user",
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType
+                  }
+                }
+              ]
             }
-          ]
-        }
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: {
-              type: Type.STRING,
-              description: "A short, engaging title for the media file (example: 'Sunset over the mountains')."
-            },
-            description: {
-              type: Type.STRING,
-              description: "A detailed description of the media file, explaining what is happening or what is shown."
-            },
-            tags: {
-              type: Type.ARRAY,
-              description: "A list of relevant keywords or tags (example: 'nature', 'landscape', 'sunset').",
-              items: {
-                type: Type.STRING
-              }
-            },
-            folder: {
-              type: Type.STRING,
-              description: "A generic folder name for categorizing this image (example: 'Nature', 'Pets', 'Documents')."
+          ],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                folder: { type: Type.STRING }
+              },
+              required: ["title", "description", "tags", "folder"]
             }
-          },
-          required: ["title", "description", "tags", "folder"]
+          }
+        });
+        break; // Success
+      } catch (err: any) {
+        if ((err.status === 429 || err.status === 503) && retries > 1) {
+          retries--;
+          console.warn(`Gemini API rate limit hit (${err.status}). Retrying in ${delay}ms...`);
+          await new Promise(res => setTimeout(res, delay));
+          delay *= 2; // Exponential backoff
+        } else {
+          throw err;
         }
       }
-    });
+    }
 
-    if (!result.text) {
-      throw new Error("Gemini returned an empty response.");
+    if (!result || !result.text) {
+      throw new Error("Gemini returned empty response");
     }
 
     const parsed = JSON.parse(result.text) as GeneratedMetadata;

@@ -2,6 +2,7 @@ interface SearchBarProps {
   query: string;
   onQueryChange: (value: string) => void;
   isLoading: boolean;
+  placeholder?: string;
 }
 
 import { Search } from "lucide-react";
@@ -9,7 +10,8 @@ import { Search } from "lucide-react";
 export function SearchBar({
   query,
   onQueryChange,
-  isLoading
+  isLoading,
+  placeholder
 }: SearchBarProps) {
   return (
     <div className="search-bar-wrapper" style={{ position: 'relative', width: '100%', maxWidth: '800px' }}>
@@ -28,7 +30,7 @@ export function SearchBar({
         id="search-query"
         type="search"
         value={query}
-        placeholder={isLoading ? "Searching..." : "Search for cat, dog, friends, vacation..."}
+        placeholder={isLoading ? "Searching..." : (placeholder || "Search for any keyword")}
         onChange={(event) => onQueryChange(event.target.value)}
         style={{
           width: '100%',

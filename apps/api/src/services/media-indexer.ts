@@ -62,7 +62,7 @@ export async function indexUploadedMedia(
   let generatedFolder = "";
 
   // Use Gemini to generate missing metadata if the user didn't provide a title or folder
-  if ((!finalTitle || !request.folder) && asset.secure_url) {
+  if ((!finalTitle || !request.folder) && asset.secure_url && !request.skipAI) {
     const generated = await generateMediaMetadata(asset.secure_url, `image/${asset.format || "jpeg"}`);
     if (!finalTitle && generated.title) finalTitle = generated.title;
     if (generated.description) finalDescription = generated.description;

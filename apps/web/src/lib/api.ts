@@ -96,7 +96,8 @@ export async function registerMediaUpload(
         description: draft.description,
         manualTags: draft.manualTags,
         publicId: upload.public_id,
-        resourceType: upload.resource_type
+        resourceType: upload.resource_type,
+        skipAI: localStorage.getItem("enableAI") === "false"
       })
     })
   );

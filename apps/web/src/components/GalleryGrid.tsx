@@ -1,5 +1,6 @@
 import type { MediaRecord, UpdateMediaDraft } from "../types/media";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { X, Save, Edit2, Folder, Trash2, Maximize2, Tag, Wand2, Star, Check, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GalleryGridProps {
   items: MediaRecord[];
@@ -7,6 +8,8 @@ interface GalleryGridProps {
   onUpdate?: (id: string, draft: UpdateMediaDraft) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   availableFolders?: string[];
+  assignModeContext?: string | null;
+  onAssignToggle?: (item: MediaRecord) => Promise<void>;
 }
 
 function formatDate(value: string): string {
@@ -32,27 +35,32 @@ function formatFileSize(bytes: number | null): string {
   return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-import { X } from "lucide-react";
 
 function MediaCard({
   item,
   onUpdate,
   onDelete,
-  availableFolders
+  availableFolders,
+  assignModeContext,
+  onAssignToggle,
+  onOpenFullscreen
 }: {
   item: MediaRecord;
   onUpdate?: (id: string, draft: UpdateMediaDraft) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   availableFolders?: string[];
+  assignModeContext?: string | null;
+  onAssignToggle?: (item: MediaRecord) => Promise<void>;
+  onOpenFullscreen?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
-  const [tags, setTags] = useState(item.manualTags.join(", "));
+  const [tags, setTags] = useState(item.manualTags.filter(t => t !== "__favorite__").join(", "));
   const [folder, setFolder] = useState(item.folder || "Uncategorized");
   const [isDescExpanded, setIsDescExpanded] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isTagsExpanded, setIsTagsExpanded] = useState(false);
 
   async function handleSave() {
     if (!onUpdate) return;
@@ -61,10 +69,11 @@ function MediaCard({
       await onUpdate(item.id, {
         title,
         description,
-        manualTags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        manualTags: (() => {
+          const parsedTags = tags.split(",").map((t) => t.trim()).filter(Boolean);
+          if (item.manualTags.includes("__favorite__")) parsedTags.push("__favorite__");
+          return parsedTags;
+        })(),
         folder: folder === "Uncategorized" ? "" : folder
       });
       setIsEditing(false);
@@ -79,7 +88,7 @@ function MediaCard({
   function handleCancel() {
     setTitle(item.title);
     setDescription(item.description);
-    setTags(item.manualTags.join(", "));
+    setTags(item.manualTags.filter(t => t !== "__favorite__").join(", "));
     setFolder(item.folder || "Uncategorized");
     setIsEditing(false);
   }
@@ -96,24 +105,63 @@ function MediaCard({
     }
   }
 
+  async function handleFavorite(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!onUpdate) return;
+    const isFav = item.manualTags.includes("__favorite__");
+    const newTags = isFav 
+      ? item.manualTags.filter(t => t !== "__favorite__") 
+      : [...item.manualTags, "__favorite__"];
+      
+    try {
+      await onUpdate(item.id, { 
+        manualTags: newTags,
+        title: item.title,
+        description: item.description
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update favorite status.");
+    }
+  }
+
+  const isFavorite = item.manualTags.includes("__favorite__");
+
   return (
     <>
-      {isFullscreen && (
-        <div className="modal-overlay" onClick={() => setIsFullscreen(false)} style={{ zIndex: 9999 }}>
-          <div className="fullscreen-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
-            <button className="close-modal-btn" onClick={() => setIsFullscreen(false)} style={{ top: '-40px', right: '-40px', color: 'white', background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '50%' }}>
-              <X size={24} />
-            </button>
-            {item.resourceType === "video" ? (
-              <video controls autoPlay src={item.mediaUrl} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block' }} />
-            ) : (
-              <img src={item.mediaUrl} alt={item.title} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block', objectFit: 'contain' }} />
-            )}
-          </div>
-        </div>
-      )}
-      <article className="media-card">
-        <div className="media-frame" onClick={() => !isEditing && setIsFullscreen(true)} style={{ cursor: isEditing ? 'default' : 'zoom-in' }}>
+      <article className={`media-card ${assignModeContext ? (item.manualTags.some(t => t.toLowerCase() === assignModeContext.toLowerCase()) ? 'assigned' : '') : ''}`}>
+        <div  
+          className="media-frame" 
+          onClick={(e) => {
+            if (assignModeContext && onAssignToggle) {
+              e.preventDefault();
+              onAssignToggle(item);
+            } else if (!isEditing) {
+              onOpenFullscreen?.();
+            }
+          }} 
+          style={{ cursor: assignModeContext ? 'pointer' : (isEditing ? 'default' : 'zoom-in') }}
+        >
+          {assignModeContext && (
+            <div style={{
+              position: 'absolute',
+              top: '12px',
+              left: '12px',
+              zIndex: 10,
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              backgroundColor: item.manualTags.some(t => t.toLowerCase() === assignModeContext.toLowerCase()) ? 'var(--primary)' : 'rgba(0,0,0,0.5)',
+              border: '2px solid white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            }}>
+              {item.manualTags.some(t => t.toLowerCase() === assignModeContext.toLowerCase()) && <Check size={14} strokeWidth={3} />}
+            </div>
+          )}
           {item.resourceType === "video" ? (
             <video
               controls={false}
@@ -133,7 +181,27 @@ function MediaCard({
       <div className="media-content">
         <div className="media-meta-row">
           <span className="media-type">{item.resourceType}</span>
-          <span>{formatDate(item.createdAt)}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{formatDate(item.createdAt)}</span>
+            {onUpdate && !isEditing && (
+              <button 
+                onClick={handleFavorite} 
+                className="favorite-btn" 
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  padding: '2px', 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  color: isFavorite ? '#FACC15' : 'var(--text-muted)'
+                }}
+                title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+              >
+                <Star size={16} fill={isFavorite ? "#FACC15" : "none"} />
+              </button>
+            )}
+          </div>
         </div>
 
         {isEditing ? (
@@ -199,24 +267,39 @@ function MediaCard({
               <p className="media-description">No description</p>
             )}
 
-            <div className="tag-list">
-              {item.manualTags.map((tag) => (
-                <span
-                  className="tag manual-tag"
-                  key={`manual-${item.id}-${tag}`}
-                >
-                  {tag}
-                </span>
-              ))}
-              {item.aiTags.map((tag) => (
-                <span
-                  className="tag ai-tag"
-                  key={`ai-${item.id}-${tag}`}
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+            {(() => {
+              const allTags = [
+                ...item.manualTags.filter(t => t !== "__favorite__").map(tag => ({ text: tag, type: 'manual' })),
+                ...item.aiTags.map(tag => ({ text: tag, type: 'ai' }))
+              ];
+              if (allTags.length === 0) return null;
+              
+              const visibleTags = isTagsExpanded ? allTags : allTags.slice(0, 5);
+              const hasMore = allTags.length > 5;
+
+              return (
+                <div className="tag-list" style={{ alignItems: 'center' }}>
+                  {visibleTags.map((tag, i) => (
+                    <span
+                      className={`tag ${tag.type}-tag`}
+                      key={`${tag.type}-${item.id}-${tag.text}-${i}`}
+                    >
+                      {tag.text}
+                    </span>
+                  ))}
+                  {hasMore && (
+                    <button 
+                      className="expand-btn" 
+                      onClick={() => setIsTagsExpanded(!isTagsExpanded)}
+                      style={{ margin: 0, padding: '4px', height: 'fit-content' }}
+                      title={isTagsExpanded ? "Show fewer tags" : "Show more tags"}
+                    >
+                      {isTagsExpanded ? "▲" : `+${allTags.length - 5} ▼`}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </>
         )}
 
@@ -242,7 +325,18 @@ function MediaCard({
   );
 }
 
-export function GalleryGrid({ items, isLoading, onUpdate, onDelete, availableFolders }: GalleryGridProps) {
+export function GalleryGrid({ 
+  items, 
+  isLoading, 
+  onUpdate, 
+  onDelete, 
+  availableFolders,
+  assignModeContext,
+  onAssignToggle
+}: GalleryGridProps) {
+  const density = localStorage.getItem("gridDensity") || "comfortable";
+  const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
+
   if (isLoading) {
     return (
       <section className="panel gallery-panel">
@@ -275,17 +369,87 @@ export function GalleryGrid({ items, isLoading, onUpdate, onDelete, availableFol
         <h2>{items.length} indexed result{items.length === 1 ? "" : "s"}</h2>
       </div>
 
-      <div className="gallery-grid">
-        {items.map((item) => (
+      <div className={`gallery-grid density-${density}`}>
+        {items.map((item, index) => (
           <MediaCard 
             key={item.id} 
             item={item} 
             onUpdate={onUpdate} 
             onDelete={onDelete} 
             availableFolders={availableFolders} 
+            assignModeContext={assignModeContext}
+            onAssignToggle={onAssignToggle}
+            onOpenFullscreen={() => setFullscreenIndex(index)}
           />
         ))}
       </div>
+
+      {fullscreenIndex !== null && (
+        <FullscreenViewer 
+          items={items} 
+          initialIndex={fullscreenIndex} 
+          onClose={() => setFullscreenIndex(null)} 
+        />
+      )}
     </section>
+  );
+}
+
+function FullscreenViewer({ items, initialIndex, onClose }: { items: MediaRecord[], initialIndex: number, onClose: () => void }) {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  const handleNext = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (currentIndex < items.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  }, [currentIndex, items.length]);
+
+  const handlePrev = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  }, [currentIndex]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') handleNext();
+      if (e.key === 'ArrowLeft') handlePrev();
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleNext, handlePrev, onClose]);
+
+  const item = items[currentIndex];
+  if (!item) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.95)' }}>
+      <button className="close-modal-btn" onClick={onClose} style={{ position: 'absolute', top: '24px', right: '24px', color: 'white', background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '50%', zIndex: 10000, border: 'none', cursor: 'pointer' }}>
+        <X size={24} />
+      </button>
+
+      {currentIndex > 0 && (
+        <button onClick={handlePrev} style={{ position: 'absolute', left: '24px', color: 'white', background: 'rgba(0,0,0,0.5)', padding: '12px', borderRadius: '50%', border: 'none', cursor: 'pointer', zIndex: 10000 }}>
+          <ChevronLeft size={32} />
+        </button>
+      )}
+
+      <div className="fullscreen-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '80vw', maxHeight: '90vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        {item.resourceType === "video" ? (
+          <video controls autoPlay src={item.mediaUrl} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block', objectFit: 'contain' }} />
+        ) : (
+          <img src={item.mediaUrl} alt={item.title} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block', objectFit: 'contain' }} />
+        )}
+      </div>
+
+      {currentIndex < items.length - 1 && (
+        <button onClick={handleNext} style={{ position: 'absolute', right: '24px', color: 'white', background: 'rgba(0,0,0,0.5)', padding: '12px', borderRadius: '50%', border: 'none', cursor: 'pointer', zIndex: 10000 }}>
+          <ChevronRight size={32} />
+        </button>
+      )}
+    </div>
   );
 }

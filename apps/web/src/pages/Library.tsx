@@ -1,6 +1,7 @@
 import { useEffect, useState, startTransition } from "react";
-import { Folder, Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import { Folder, Plus, Trash2, Edit2, Check, X, ArrowLeft, Image as ImageIcon } from "lucide-react";
 import { GalleryGrid } from "../components/GalleryGrid";
+import { SearchBar } from "../components/SearchBar";
 import { fetchMedia, deleteFolder, renameFolderApi } from "../lib/api";
 import type { MediaRecord } from "../types/media";
 
@@ -11,10 +12,12 @@ export function Library() {
   const [customFolders, setCustomFolders] = useState<string[]>([]);
   const [folderDescriptions, setFolderDescriptions] = useState<Record<string, string>>({});
   
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [editingFolder, setEditingFolder] = useState<string | null>(null);
   const [editFolderName, setEditFolderName] = useState("");
   const [editFolderDesc, setEditFolderDesc] = useState("");
   const [isSavingFolder, setIsSavingFolder] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem("customFolders");
@@ -205,23 +208,64 @@ export function Library() {
   }, {});
 
   const foldersSet = new Set([...Object.keys(groupedItems), ...customFolders]);
-  const folders = Array.from(foldersSet).sort();
+  const folders = Array.from(foldersSet)
+    .sort()
+    .filter(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="page-container">
       <header className="page-header">
         <div>
-          <h1>Library</h1>
-          <p className="subtitle">Your organized media</p>
+          {activeFolder ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button 
+                onClick={() => {
+                  setActiveFolder(null);
+                  setSearchQuery("");
+                }}
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-main)',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {activeFolder}
+              </h1>
+            </div>
+          ) : (
+            <>
+              <h1>Library</h1>
+              <p className="subtitle">Your organized media</p>
+            </>
+          )}
         </div>
-        <div className="header-actions">
-          <button 
-            className="primary-button icon-button"
-            onClick={handleNewFolder}
-          >
-            <Plus size={20} />
-            <span>New Folder</span>
-          </button>
+        <div className="header-actions" style={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+          <SearchBar 
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            isLoading={isLoading}
+            placeholder={activeFolder ? `Search in ${activeFolder}...` : "Search albums..."}
+          />
+          {!activeFolder && (
+            <button 
+              className="primary-button icon-button"
+              onClick={handleNewFolder}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              <Plus size={20} />
+              <span>New Album</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -234,103 +278,187 @@ export function Library() {
             <h2>Loading folders...</h2>
           </div>
         </section>
+      ) : activeFolder ? (
+        // --- ALBUM DETAILS VIEW ---
+        <div className="folder-section" style={{ marginTop: '0' }}>
+          {folderDescriptions[activeFolder] && (
+            <p className="muted-text" style={{ marginBottom: '24px', fontSize: '1rem' }}>
+              {folderDescriptions[activeFolder]}
+            </p>
+          )}
+          {(() => {
+            const folderItems = (groupedItems[activeFolder] || []).filter(item => {
+              if (!searchQuery) return true;
+              const q = searchQuery.toLowerCase();
+              return (
+                (item.searchText && item.searchText.toLowerCase().includes(q)) ||
+                (item.title && item.title.toLowerCase().includes(q)) || 
+                (item.description && item.description.toLowerCase().includes(q)) ||
+                (item.manualTags && item.manualTags.some(t => t.toLowerCase().includes(q))) ||
+                (item.aiTags && item.aiTags.some(t => t.toLowerCase().includes(q)))
+              );
+            });
+
+            return folderItems.length > 0 ? (
+              <GalleryGrid
+                items={folderItems}
+                isLoading={false}
+                onUpdate={handleUpdate}
+                onDelete={handleDeleteMedia}
+                availableFolders={Array.from(foldersSet)}
+              />
+            ) : (
+              <div className="placeholder-content">
+                <ImageIcon size={48} style={{ opacity: 0.2, margin: '0 auto 16px' }} />
+                <h3>This album is empty</h3>
+                <p>Upload photos and assign them to this album to see them here.</p>
+              </div>
+            );
+          })()}
+        </div>
       ) : folders.length === 0 ? (
         <section className="panel gallery-panel">
           <div className="section-heading">
             <p className="eyebrow">Library</p>
-            <h2>No media found</h2>
+            <h2>No albums found</h2>
           </div>
-          <p className="muted-text">Upload some media to see them organized by folder here.</p>
+          <p className="muted-text">Upload some media or create a new album to see them organized here.</p>
         </section>
       ) : (
-        folders.map((folder) => (
-          <div key={folder} className="folder-section">
-            <div className="folder-heading" style={{ justifyContent: "space-between" }}>
-              {editingFolder === folder ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", flexGrow: 1, paddingRight: "16px" }}>
-                  <input 
-                    type="text" 
-                    value={editFolderName} 
-                    onChange={e => setEditFolderName(e.target.value)} 
-                    className="edit-input" 
-                    placeholder="Folder name"
-                    style={{ fontSize: "1.25rem", fontWeight: "bold" }}
-                  />
-                  <textarea 
-                    value={editFolderDesc} 
-                    onChange={e => setEditFolderDesc(e.target.value)} 
-                    className="edit-input" 
-                    placeholder="Folder description (optional)"
-                    rows={2}
-                  />
+        // --- ALBUMS OVERVIEW GRID ---
+        <div className="album-grid">
+          {folders.map((folder) => {
+            const folderItems = groupedItems[folder] || [];
+            const previews = folderItems.slice(0, 4);
+            const isEditing = editingFolder === folder;
+
+            return (
+              <div 
+                key={folder} 
+                className="album-card"
+                onClick={() => {
+                  if (!isEditing) {
+                    setActiveFolder(folder);
+                    setSearchQuery("");
+                  }
+                }}
+              >
+                <div className="album-preview-container">
+                  <div className="album-preview-grid">
+                    {previews.length > 0 ? (
+                      previews.map((item, idx) => (
+                        item.resourceType === 'video' ? (
+                          <video 
+                            key={idx} 
+                            src={item.mediaUrl} 
+                            className="album-preview-item" 
+                            muted playsInline 
+                            style={{ 
+                              gridColumn: previews.length === 1 ? '1 / span 2' : 'auto',
+                              gridRow: previews.length === 1 ? '1 / span 2' : (previews.length === 2 ? '1 / span 2' : 'auto')
+                            }}
+                          />
+                        ) : (
+                          <img 
+                            key={idx} 
+                            src={item.mediaUrl} 
+                            alt={item.title || "Preview"} 
+                            className="album-preview-item"
+                            style={{ 
+                              gridColumn: previews.length === 1 ? '1 / span 2' : 'auto',
+                              gridRow: previews.length === 1 ? '1 / span 2' : (previews.length === 2 ? '1 / span 2' : 'auto')
+                            }}
+                          />
+                        )
+                      ))
+                    ) : (
+                      <div className="album-preview-empty" style={{ gridColumn: '1 / span 2', gridRow: '1 / span 2' }}>
+                        <ImageIcon size={32} opacity={0.3} />
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                  <Folder className="folder-heading-icon" size={24} />
-                  <span>{folder}</span>
-                  {folderDescriptions[folder] && (
-                    <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginLeft: "8px", fontWeight: "normal" }}>
-                      — {folderDescriptions[folder]}
-                    </span>
+
+                <div className="album-info" onClick={(e) => isEditing && e.stopPropagation()}>
+                  {isEditing ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", flexGrow: 1 }}>
+                      <input 
+                        type="text" 
+                        value={editFolderName} 
+                        onChange={e => setEditFolderName(e.target.value)} 
+                        className="edit-input" 
+                        placeholder="Folder name"
+                        style={{ fontSize: "1rem", fontWeight: "bold" }}
+                        autoFocus
+                      />
+                      <textarea 
+                        value={editFolderDesc} 
+                        onChange={e => setEditFolderDesc(e.target.value)} 
+                        className="edit-input" 
+                        placeholder="Folder description (optional)"
+                        rows={2}
+                      />
+                      <div className="album-actions" style={{ marginTop: '4px' }}>
+                        <button 
+                          className="icon-button"
+                          style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
+                          onClick={(e) => { e.stopPropagation(); setEditingFolder(null); }}
+                          disabled={isSavingFolder}
+                        >
+                          <X size={18} />
+                        </button>
+                        <button 
+                          className="icon-button"
+                          style={{ background: "transparent", border: "none", color: "var(--success)", cursor: "pointer", padding: "4px" }}
+                          onClick={(e) => { e.stopPropagation(); saveFolderEdit(folder); }}
+                          disabled={isSavingFolder}
+                        >
+                          <Check size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="album-header">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                          <h3 className="album-title" title={folder}>{folder}</h3>
+                          <span className="album-count">
+                            {folderItems.length} {folderItems.length === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {folderDescriptions[folder] && (
+                        <p className="album-desc" title={folderDescriptions[folder]}>
+                          {folderDescriptions[folder]}
+                        </p>
+                      )}
+
+                      <div className="album-actions" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          className="icon-button"
+                          style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
+                          onClick={() => startEditingFolder(folder)}
+                          title="Rename/Edit Album"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          className="icon-button"
+                          style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", padding: "4px" }}
+                          onClick={() => handleDeleteFolder(folder)}
+                          title="Delete Album"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
-              )}
-              
-              <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-                {editingFolder === folder ? (
-                  <>
-                    <button 
-                      className="icon-button"
-                      style={{ background: "transparent", border: "none", color: "var(--success)", cursor: "pointer", padding: "4px" }}
-                      onClick={() => saveFolderEdit(folder)}
-                      disabled={isSavingFolder}
-                    >
-                      <Check size={18} />
-                    </button>
-                    <button 
-                      className="icon-button"
-                      style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
-                      onClick={() => setEditingFolder(null)}
-                      disabled={isSavingFolder}
-                    >
-                      <X size={18} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button 
-                      className="icon-button"
-                      style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
-                      onClick={() => startEditingFolder(folder)}
-                      aria-label={`Edit ${folder}`}
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button 
-                      className="icon-button"
-                      style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", padding: "4px" }}
-                      onClick={() => handleDeleteFolder(folder)}
-                      aria-label={`Delete ${folder}`}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </>
-                )}
               </div>
-            </div>
-            {groupedItems[folder] && groupedItems[folder].length > 0 ? (
-              <GalleryGrid
-                items={groupedItems[folder]}
-                isLoading={false}
-                onUpdate={handleUpdate}
-                onDelete={handleDeleteMedia}
-                availableFolders={folders}
-              />
-            ) : (
-              <p className="muted-text" style={{ padding: "0 12px" }}>This folder is empty.</p>
-            )}
-          </div>
-        ))
+            );
+          })}
+        </div>
       )}
     </div>
   );

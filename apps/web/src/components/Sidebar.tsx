@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   Home,
   FolderLock,
-  Users,
+  Star,
   ScanFace,
   Settings,
   LogOut,
@@ -55,12 +55,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           Library
         </NavLink>
         <NavLink
-          to="/shared-albums"
+          to="/favorites"
           onClick={onClose}
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
         >
-          <Users className="nav-icon" />
-          Shared Albums
+          <Star className="nav-icon" />
+          Favorites
         </NavLink>
         <NavLink
           to="/recognized-persons"
@@ -83,8 +83,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
       </nav>
 
       <div className="sidebar-footer">
-        <div className="account-info">
-          <span className="account-name">{accountName}</span>
+        <div className="account-info" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--surface-hover)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {user?.user_metadata?.avatar_url ? (
+              <img src={user.user_metadata.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{accountName.charAt(0).toUpperCase()}</span>
+            )}
+          </div>
+          <span className="account-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{accountName}</span>
         </div>
         <button className="sign-out-btn" onClick={toggleTheme} style={{ marginBottom: '8px' }}>
           {theme === "light" ? (

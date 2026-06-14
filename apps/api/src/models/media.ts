@@ -5,8 +5,9 @@ export interface RegisterMediaRequest {
   description: string;
   manualTags: string[];
   publicId: string;
-  resourceType: MediaResourceType;
+  resourceType: MediaResourceType | "raw";
   folder?: string;
+  skipAI?: boolean;
 }
 
 export interface UpdateMediaRequest {
