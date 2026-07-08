@@ -61,9 +61,11 @@ export async function indexUploadedMedia(
   let aiTags = dedupeTags(asset.tags ?? []);
   let generatedFolder = "";
 
-  // Use Gemini to generate missing metadata if the user didn't provide a title or folder
   if ((!finalTitle || !request.folder) && asset.secure_url && !request.skipAI) {
-    const generated = await generateMediaMetadata(asset.secure_url, `image/${asset.format || "jpeg"}`);
+    const mimeType = request.resourceType === "video" 
+      ? `video/${asset.format || "mp4"}`
+      : `image/${asset.format || "jpeg"}`;
+    const generated = await generateMediaMetadata(asset.secure_url, mimeType);
     if (!finalTitle && generated.title) finalTitle = generated.title;
     if (generated.description) finalDescription = generated.description;
     if (generated.tags && generated.tags.length > 0) {
@@ -72,7 +74,6 @@ export async function indexUploadedMedia(
     if (!request.folder && generated.folder) generatedFolder = generated.folder;
   }
 
-  // Ensure title is not totally empty after AI attempt
   if (!finalTitle) {
     finalTitle = asset.original_filename || "Untitled Image";
   }
@@ -89,7 +90,7 @@ export async function indexUploadedMedia(
   const finalFolder = request.folder || generatedFolder || asset.folder || "Uncategorized";
 
   return {
-    id: "", // The database auto-generates the integer ID
+    id: "",
     title: finalTitle,
     description: finalDescription,
     manualTags,

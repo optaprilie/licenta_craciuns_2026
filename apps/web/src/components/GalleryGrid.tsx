@@ -1,6 +1,7 @@
 import type { MediaRecord, UpdateMediaDraft } from "../types/media";
 import { useState, useEffect, useCallback } from "react";
-import { X, Save, Edit2, Folder, Trash2, Maximize2, Tag, Wand2, Star, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Save, Edit2, Folder, Trash2, Maximize2, Tag, Wand2, Star, Check, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize } from "lucide-react";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface GalleryGridProps {
   items: MediaRecord[];
@@ -437,11 +438,30 @@ function FullscreenViewer({ items, initialIndex, onClose }: { items: MediaRecord
         </button>
       )}
 
-      <div className="fullscreen-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '80vw', maxHeight: '90vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div className="fullscreen-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', width: '80vw', height: '90vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         {item.resourceType === "video" ? (
           <video controls autoPlay src={item.mediaUrl} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block', objectFit: 'contain' }} />
         ) : (
-          <img src={item.mediaUrl} alt={item.title} style={{ maxWidth: '100%', maxHeight: '90vh', display: 'block', objectFit: 'contain' }} />
+          <TransformWrapper
+            initialScale={1}
+            minScale={0.5}
+            maxScale={8}
+            centerOnInit
+            wheel={{ step: 0.1 }}
+          >
+            {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
+              <>
+                <div className="zoom-controls" style={{ position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '12px', background: 'rgba(0,0,0,0.6)', padding: '8px', borderRadius: '12px', zIndex: 10000 }}>
+                  <button onClick={() => zoomOut()} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom Out"><ZoomOut size={20} /></button>
+                  <button onClick={() => resetTransform()} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Reset Zoom"><Maximize size={20} /></button>
+                  <button onClick={() => zoomIn()} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Zoom In"><ZoomIn size={20} /></button>
+                </div>
+                <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                  <img src={item.mediaUrl} alt={item.title} style={{ maxWidth: '100%', maxHeight: '100%', display: 'block', objectFit: 'contain' }} />
+                </TransformComponent>
+              </>
+            )}
+          </TransformWrapper>
         )}
       </div>
 

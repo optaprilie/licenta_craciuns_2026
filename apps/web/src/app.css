@@ -414,6 +414,13 @@ h3 {
   --grid-gap: 24px;
 }
 
+@media (max-width: 768px) {
+  .gallery-grid {
+    --grid-density: 120px !important;
+    --grid-gap: 12px !important;
+  }
+}
+
 /* --- Album Grid --- */
 .album-grid {
   display: grid;

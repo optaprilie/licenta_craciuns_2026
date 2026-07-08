@@ -38,7 +38,7 @@ export async function generateMediaMetadata(
     const base64Data = buffer.toString("base64");
 
     // 2. Prepare the prompt and schema
-    const prompt = "Analyze this image and generate a concise title, a detailed description (if the image contains any text, please transcribe it completely and include it at the end of the description), a list of relevant tags, and a generic folder name for categorizing it (e.g. 'Nature', 'Pets', 'Documents', 'Vacation', 'Portraits'). The folder name should be a maximum of 2 words.";
+    const prompt = "Analyze this media file and generate a concise title, a detailed description (if it contains any text or speech, please transcribe it completely and include it at the end of the description), a list of relevant tags, and a generic folder name for categorizing it (e.g. 'Nature', 'Pets', 'Documents', 'Vacation', 'Portraits'). The folder name should be a maximum of 2 words.";
 
     // 3. Call Gemini with retry logic for 429/503 errors
     let result;
