@@ -10,8 +10,9 @@ import {
 
 const tableName = "media";
 
-function toSnakeCase(media: MediaDocument): Record<string, any> {
+function toSnakeCase(media: MediaDocument, userId: string): Record<string, any> {
   const result: Record<string, any> = {
+    user_id: userId,
     title: media.title,
     description: media.description,
     manual_tags: media.manualTags,
@@ -67,23 +68,24 @@ function sortMediaRecords(a: MediaDocument, b: MediaDocument): number {
   return b.indexedAt.localeCompare(a.indexedAt);
 }
 
-export async function getMediaRecord(id: string): Promise<MediaDocument | null> {
-  const { data, error } = await supabase.from(tableName).select('*').eq('id', id).single();
+export async function getMediaRecord(id: string, userId: string): Promise<MediaDocument | null> {
+  const { data, error } = await supabase.from(tableName).select('*').eq('id', id).eq('user_id', userId).single();
   if (error || !data) return null;
   return toCamelCase(data);
 }
 
-export async function saveMediaRecord(media: MediaDocument): Promise<MediaDocument> {
-  const { data, error } = await supabase.from(tableName).insert([toSnakeCase(media)]).select().single();
+export async function saveMediaRecord(media: MediaDocument, userId: string): Promise<MediaDocument> {
+  const { data, error } = await supabase.from(tableName).insert([toSnakeCase(media, userId)]).select().single();
   if (error) throw new Error(error.message);
   return toCamelCase(data);
 }
 
 export async function updateMediaRecord(
   id: string,
-  updates: UpdateMediaRequest
+  updates: UpdateMediaRequest,
+  userId: string
 ): Promise<MediaDocument> {
-  const existing = await getMediaRecord(id);
+  const existing = await getMediaRecord(id, userId);
 
   if (!existing) {
     throw new Error("Media record not found.");
@@ -109,15 +111,16 @@ export async function updateMediaRecord(
   updated.searchText = searchIndex.text;
   updated.searchTokens = searchIndex.tokens;
 
-  const { data, error } = await supabase.from(tableName).update(toSnakeCase(updated)).eq('id', id).select().single();
+  const { data, error } = await supabase.from(tableName).update(toSnakeCase(updated, userId)).eq('id', id).eq('user_id', userId).select().single();
   if (error) throw new Error(error.message);
   return toCamelCase(data);
 }
 
-export async function listRecentMedia(limit = 24): Promise<MediaDocument[]> {
+export async function listRecentMedia(limit = 24, userId: string): Promise<MediaDocument[]> {
   const { data, error } = await supabase
     .from(tableName)
     .select('*')
+    .eq('user_id', userId)
     .order('indexed_at', { ascending: false })
     .limit(limit);
 
@@ -127,17 +130,19 @@ export async function listRecentMedia(limit = 24): Promise<MediaDocument[]> {
 
 export async function searchMedia(
   query: string,
-  limit = 24
+  limit = 24,
+  userId: string
 ): Promise<MediaDocument[]> {
   const tokens = tokenizeText(query).slice(0, 10);
 
   if (tokens.length === 0) {
-    return listRecentMedia(limit);
+    return listRecentMedia(limit, userId);
   }
 
   const { data, error } = await supabase
     .from(tableName)
     .select('*')
+    .eq('user_id', userId)
     .overlaps('search_tokens', tokens)
     .limit(Math.min(Math.max(limit * 3, 24), 100));
 
@@ -162,17 +167,17 @@ export async function searchMedia(
     .map((candidate) => candidate.item);
 }
 
-export async function deleteMediaRecord(id: string): Promise<void> {
-  const { error } = await supabase.from(tableName).delete().eq('id', id);
+export async function deleteMediaRecord(id: string, userId: string): Promise<void> {
+  const { error } = await supabase.from(tableName).delete().eq('id', id).eq('user_id', userId);
   if (error) throw new Error(error.message);
 }
 
-export async function deleteFolderMedia(folderName: string): Promise<void> {
-  const { error } = await supabase.from(tableName).delete().eq('folder', folderName);
+export async function deleteFolderMedia(folderName: string, userId: string): Promise<void> {
+  const { error } = await supabase.from(tableName).delete().eq('folder', folderName).eq('user_id', userId);
   if (error) throw new Error(error.message);
 }
 
-export async function renameFolder(oldName: string, newName: string): Promise<void> {
-  const { error } = await supabase.from(tableName).update({ folder: newName }).eq('folder', oldName);
+export async function renameFolder(oldName: string, newName: string, userId: string): Promise<void> {
+  const { error } = await supabase.from(tableName).update({ folder: newName }).eq('folder', oldName).eq('user_id', userId);
   if (error) throw new Error(error.message);
 }

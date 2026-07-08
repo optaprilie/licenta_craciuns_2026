@@ -5,11 +5,15 @@ import type {
   RegisterMediaRequest
 } from "../models/media.js";
 import { indexUploadedMedia } from "../services/media-indexer.js";
+import { requireAuth } from "../middleware/auth.js";
 import {
   listRecentMedia,
   saveMediaRecord,
   searchMedia,
-  updateMediaRecord
+  updateMediaRecord,
+  deleteMediaRecord,
+  deleteFolderMedia,
+  renameFolder
 } from "../services/media-repository.js";
 
 const router = Router();
@@ -55,8 +59,9 @@ function parseRegisterBody(body: unknown): RegisterMediaRequest {
   };
 }
 
-router.get("/", async (request, response, next) => {
+router.get("/", requireAuth, async (request, response, next) => {
   try {
+    const userId = response.locals.user.id;
     const query = typeof request.query.q === "string" ? request.query.q.trim() : "";
     const limitParam =
       typeof request.query.limit === "string" ? Number(request.query.limit) : 24;
@@ -65,8 +70,8 @@ router.get("/", async (request, response, next) => {
       : 24;
 
     const items = query
-      ? await searchMedia(query, limit)
-      : await listRecentMedia(limit);
+      ? await searchMedia(query, limit, userId)
+      : await listRecentMedia(limit, userId);
 
     response.json({
       items
@@ -76,11 +81,12 @@ router.get("/", async (request, response, next) => {
   }
 });
 
-router.post("/register", async (request, response, next) => {
+router.post("/register", requireAuth, async (request, response, next) => {
   try {
+    const userId = response.locals.user.id;
     const payload = parseRegisterBody(request.body);
     const indexedMedia = await indexUploadedMedia(payload);
-    const savedMedia = await saveMediaRecord(indexedMedia);
+    const savedMedia = await saveMediaRecord(indexedMedia, userId);
 
     response.status(201).json({
       item: savedMedia
@@ -97,8 +103,9 @@ router.post("/register", async (request, response, next) => {
   }
 });
 
-router.patch("/:id", async (request, response, next) => {
+router.patch("/:id", requireAuth, async (request, response, next) => {
   try {
+    const userId = response.locals.user.id;
     const id = request.params.id;
     if (!id) {
       response.status(400).json({ message: "Media ID is required." });
@@ -115,7 +122,7 @@ router.patch("/:id", async (request, response, next) => {
       updates.manualTags = body.manualTags.filter((t: unknown): t is string => typeof t === "string");
     }
 
-    const updatedMedia = await updateMediaRecord(id, updates);
+    const updatedMedia = await updateMediaRecord(id, updates, userId);
 
     response.json({
       item: updatedMedia
@@ -129,8 +136,9 @@ router.patch("/:id", async (request, response, next) => {
   }
 });
 
-router.patch("/folder/:folder", async (request, response, next) => {
+router.patch("/folder/:folder", requireAuth, async (request, response, next) => {
   try {
+    const userId = response.locals.user.id;
     const oldFolder = request.params.folder;
     const body = request.body || {};
     const newFolder = typeof body.newName === "string" ? body.newName.trim() : "";
@@ -146,7 +154,7 @@ router.patch("/folder/:folder", async (request, response, next) => {
     }
 
     const { renameFolder } = await import("../services/media-repository.js");
-    await renameFolder(oldFolder, newFolder);
+    await renameFolder(oldFolder, newFolder, userId);
 
     response.json({ message: "Folder renamed successfully." });
   } catch (error) {
@@ -154,8 +162,9 @@ router.patch("/folder/:folder", async (request, response, next) => {
   }
 });
 
-router.delete("/folder/:folder", async (request, response, next) => {
+router.delete("/folder/:folder", requireAuth, async (request, response, next) => {
   try {
+    const userId = response.locals.user.id;
     const folder = request.params.folder;
     if (!folder) {
       response.status(400).json({ message: "Folder name is required." });
@@ -163,7 +172,7 @@ router.delete("/folder/:folder", async (request, response, next) => {
     }
 
     const { deleteFolderMedia } = await import("../services/media-repository.js");
-    await deleteFolderMedia(folder);
+    await deleteFolderMedia(folder, userId);
 
     response.status(204).send();
   } catch (error) {
@@ -171,8 +180,9 @@ router.delete("/folder/:folder", async (request, response, next) => {
   }
 });
 
-router.delete("/:id", async (request, response, next) => {
+router.delete("/:id", requireAuth, async (request, response, next) => {
   try {
+    const userId = response.locals.user.id;
     const id = request.params.id;
     if (!id) {
       response.status(400).json({ message: "Media ID is required." });
@@ -180,7 +190,7 @@ router.delete("/:id", async (request, response, next) => {
     }
 
     const { deleteMediaRecord } = await import("../services/media-repository.js");
-    await deleteMediaRecord(id);
+    await deleteMediaRecord(id, userId);
 
     response.status(204).send();
   } catch (error) {

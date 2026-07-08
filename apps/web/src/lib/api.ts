@@ -1,4 +1,5 @@
 import type { MediaRecord, MediaResourceType, UploadDraft } from "../types/media";
+import { supabase } from "./supabase";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -12,6 +13,18 @@ interface UploadSignatureResponse {
 interface CloudinaryUploadResponse {
   public_id: string;
   resource_type: MediaResourceType | "raw";
+}
+
+async function fetchWithAuth(url: string | URL, options: RequestInit = {}) {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return fetch(url, { ...options, headers });
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -44,13 +57,13 @@ export async function fetchMedia(query: string): Promise<MediaRecord[]> {
     url.searchParams.set("q", query.trim());
   }
 
-  const payload = await handleResponse<{ items: MediaRecord[] }>(await fetch(url));
+  const payload = await handleResponse<{ items: MediaRecord[] }>(await fetchWithAuth(url));
   return payload.items;
 }
 
 export async function createUploadSignature(): Promise<UploadSignatureResponse> {
   return handleResponse<UploadSignatureResponse>(
-    await fetch(`${API_BASE_URL}/api/uploads/signature`, {
+    await fetchWithAuth(`${API_BASE_URL}/api/uploads/signature`, {
       method: "POST"
     })
   );
@@ -86,7 +99,7 @@ export async function registerMediaUpload(
   }
 
   const payload = await handleResponse<{ item: MediaRecord }>(
-    await fetch(`${API_BASE_URL}/api/media/register`, {
+    await fetchWithAuth(`${API_BASE_URL}/api/media/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -110,7 +123,7 @@ export async function updateMedia(
   draft: Pick<UploadDraft, "title" | "description" | "manualTags" | "folder">
 ): Promise<MediaRecord> {
   const payload = await handleResponse<{ item: MediaRecord }>(
-    await fetch(`${API_BASE_URL}/api/media/${id}`, {
+    await fetchWithAuth(`${API_BASE_URL}/api/media/${id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json"
@@ -129,7 +142,7 @@ export async function updateMedia(
 
 export async function deleteMedia(id: string): Promise<void> {
   await handleResponse<void>(
-    await fetch(`${API_BASE_URL}/api/media/${id}`, {
+    await fetchWithAuth(`${API_BASE_URL}/api/media/${id}`, {
       method: "DELETE"
     })
   );
@@ -137,7 +150,7 @@ export async function deleteMedia(id: string): Promise<void> {
 
 export async function deleteFolder(folderName: string): Promise<void> {
   await handleResponse<void>(
-    await fetch(`${API_BASE_URL}/api/media/folder/${encodeURIComponent(folderName)}`, {
+    await fetchWithAuth(`${API_BASE_URL}/api/media/folder/${encodeURIComponent(folderName)}`, {
       method: "DELETE"
     })
   );
@@ -145,7 +158,7 @@ export async function deleteFolder(folderName: string): Promise<void> {
 
 export async function renameFolderApi(oldName: string, newName: string): Promise<void> {
   await handleResponse<{ message: string }>(
-    await fetch(`${API_BASE_URL}/api/media/folder/${encodeURIComponent(oldName)}`, {
+    await fetchWithAuth(`${API_BASE_URL}/api/media/folder/${encodeURIComponent(oldName)}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json"
